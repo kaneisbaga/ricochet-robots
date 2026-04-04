@@ -1,0 +1,20 @@
+/* Ricochet Robots v1.02 | 2026-04-04 */
+.cell {
+    width: 35px;
+    height: 35px;
+    box-sizing: border-box;
+    position: relative;
+    /* 移除所有預設邊框，讓地圖看起來沒有十字格子感 */
+    border: 1px solid rgba(255, 255, 255, 0.05); 
+}
+
+/* 強化牆壁視覺，確保地圖邊界清晰 */
+.wall-top { border-top: 3px solid #ffffff !important; }
+.wall-right { border-right: 3px solid #ffffff !important; }
+.wall-bottom { border-bottom: 3px solid #ffffff !important; }
+.wall-left { border-left: 3px solid #ffffff !important; }
+
+.center-block {
+    background-color: #000; /* 純黑禁區 */
+    border: none !important;
+}
