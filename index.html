@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <title>碰撞機器人 v1.03</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div id="game-container">
+        <header>
+            <h1>Ricochet Robots <span style="font-size: 0.5em;">v1.03</span></h1>
+            <div id="target-display">目前目標：<span id="current-target-name">--</span></div>
+        </header>
+
+        <div id="board-wrapper">
+            <div id="game-board"></div> </div>
+
+        <footer>
+            <div class="controls">
+                <button id="reset-btn">重新開始 (新局)</button>
+                <button id="back-to-start-btn">返回本局起點</button>
+            </div>
+            <p id="move-counter">步數：0</p>
+        </footer>
+    </div>
+
+    <script src="js/data/boards.js"></script>
+    <script src="js/data/targets.js"></script>
+    <script src="utils/map-generator.js"></script>
+    <script src="js/engine.js"></script>
+    <script src="js/renderer.js"></script>
+    <script src="js/main.js"></script>
+</body>
+</html>
