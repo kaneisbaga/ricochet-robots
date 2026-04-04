@@ -1,20 +1,75 @@
-/* Ricochet Robots v1.02 | 2026-04-04 */
+/* Ricochet Robots v1.05 | 2026-04-04 */
+body {
+    background-color: #1a1a1a;
+    color: #eee;
+    font-family: sans-serif;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    margin: 0;
+}
+
+#game-container { text-align: center; }
+
+#game-board {
+    display: grid;
+    grid-template-columns: repeat(16, 35px);
+    grid-template-rows: repeat(16, 35px);
+    background-color: #333;
+    border: 5px solid #000;
+    margin: 20px auto;
+}
+
 .cell {
     width: 35px;
     height: 35px;
     box-sizing: border-box;
     position: relative;
-    /* 移除所有預設邊框，讓地圖看起來沒有十字格子感 */
-    border: 1px solid rgba(255, 255, 255, 0.05); 
+    border: 1px solid rgba(255, 255, 255, 0.05);
 }
 
-/* 強化牆壁視覺，確保地圖邊界清晰 */
-.wall-top { border-top: 3px solid #ffffff !important; }
-.wall-right { border-right: 3px solid #ffffff !important; }
-.wall-bottom { border-bottom: 3px solid #ffffff !important; }
-.wall-left { border-left: 3px solid #ffffff !important; }
+/* 牆壁樣式 */
+.wall-top { border-top: 4px solid #fff !important; }
+.wall-right { border-right: 4px solid #fff !important; }
+.wall-bottom { border-bottom: 4px solid #fff !important; }
+.wall-left { border-left: 4px solid #fff !important; }
 
+/* 中央禁區 */
 .center-block {
-    background-color: #000; /* 純黑禁區 */
+    background-color: #000;
     border: none !important;
 }
+
+/* 機器人 */
+.robot {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    z-index: 10;
+    transition: all 0.1s ease;
+}
+
+/* 目標物 */
+.target-icon {
+    width: 18px;
+    height: 18px;
+    margin: 8px auto;
+    border-radius: 4px;
+    opacity: 0.8;
+    border: 1px solid white;
+}
+
+button {
+    padding: 10px 20px;
+    margin: 5px;
+    cursor: pointer;
+    background: #444;
+    color: white;
+    border: none;
+    border-radius: 4px;
+}
+button:hover { background: #666; }
