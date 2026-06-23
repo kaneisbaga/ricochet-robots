@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Ricochet Robots v2.5 - Candy Interaction</title>
+    <title>反射軌跡v2.6</title>
     <style>
         :root {
             /* 地圖配色鎖定 */
@@ -124,31 +124,31 @@
 
         <div class="dashboard-section">
             <div class="target-panel">
-                <div class="target-title">NEXT TARGET</div>
+                <div class="target-title">下一個目標</div>
                 <div id="target-name">--</div>
             </div>
 
             <div class="stats-panel">
                 <div class="stat-item">
                     <div id="count-num" class="stat-value">0</div>
-                    <div class="stat-label">THIS TURN</div>
+                    <div class="stat-label">本回合步數</div>
                 </div>
                 <div class="stat-item">
                     <div id="total-targets" class="stat-value">0</div>
-                    <div class="stat-label">SOLVED</div>
+                    <div class="stat-label">已解開目標</div>
                 </div>
             </div>
 
             <div class="controls">
-                <button class="btn-undo" onclick="undo()">Undo (Z)</button>
-                <button class="btn-restart" onclick="restartLevel()">Restart Level</button>
-                <button class="btn-next" onclick="skipLevel()">Shuffle Robots</button>
+                <button class="btn-undo" onclick="undo()">上一步 (Z)</button>
+                <button class="btn-restart" onclick="restartLevel()">重開本關</button>
+                <button class="btn-next" onclick="skipLevel()">隨機排列機器人</button>
             </div>
 
             <div style="margin-top: 15px; color: #bca0dc; font-size: 0.8rem; line-height: 1.5; text-align: center;">
-                <b>[Control]</b> Arrow Keys / WASD<br>
-                <b>[Goal]</b> Match robot color with target<br>
-                (Swirl works for ANY color)
+                <b>【操作方式】</b> 方向鍵<br>
+                <b>【獲勝目標】</b> 移動同色機器人至目標位置<br>
+                （糖果漩渦適用於任何顏色的機器人）
             </div>
         </div>
     </div>
@@ -264,7 +264,12 @@
 
         function pickTarget() {
             let next;
-            do { next = TARGET_DATA[Math.floor(Math.random()*TARGET_DATA.length)]; } while (next === currentTarget);
+            do {
+                next = TARGET_DATA[Math.floor(Math.random()*TARGET_DATA.length)];
+            } while (
+                next === currentTarget ||
+                robots.some(rb => rb.r === next.r && rb.c === next.c && (next.robot === 'any' || rb.id === next.robot))
+            );
             currentTarget = next;
             const nameEl = document.getElementById('target-name');
             nameEl.innerText = currentTarget.name;
@@ -351,7 +356,7 @@
 
         window.onload = init;
         window.onkeydown = (e) => {
-            const k = {'ArrowUp':'top','ArrowDown':'bottom','ArrowLeft':'left','ArrowRight':'right','w':'top','s':'bottom','a':'left','d':'right'}[e.key.toLowerCase()];
+            const k = {'arrowup':'top','arrowdown':'bottom','arrowleft':'left','arrowright':'right'}[e.key.toLowerCase()];
             if(k) { e.preventDefault(); move(k); }
             if(e.key.toLowerCase() === 'z') undo();
         };
