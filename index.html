@@ -1,0 +1,824 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>反射軌跡v2.7</title>
+    <style>
+        :root {
+            /* 地圖配色鎖定 */
+            --bg-candy: #2a2035; 
+            --panel-candy: #3b2f4a; 
+            --grid-candy: #fcfaf0; /* 奶油白底盤 */
+            --grid-line: #e0dbd1; 
+            --wall-candy: #4a3b30; /* 巧克力深棕牆壁 */
+            
+            /* 糖果色鎖定 */
+            --rb-red: #ff5e7e;    
+            --rb-blue: #4db8ff;   
+            --rb-green: #52d681;  
+            --rb-yellow: #ffb300; 
+            
+            --accent-gold: #ffd633;
+            --board-size: 82vh;
+
+            /* 機器人邊框：30% 灰色 */
+            --rb-border: rgba(128, 128, 128, 0.3);
+        }
+
+        * { box-sizing: border-box; font-family: 'Segoe UI', 'Microsoft JhengHei', sans-serif; }
+
+        body {
+            background-color: var(--bg-candy); color: #fdfaf5;
+            margin: 0; height: 100vh; display: flex; justify-content: center; align-items: center; overflow: hidden;
+        }
+
+        .main-container {
+            display: flex; gap: 40px; padding: 20px; width: 100%; height: 100vh; align-items: center; justify-content: center;
+        }
+
+        /* 棋盤 */
+        .board-section { flex: 0 0 var(--board-size); }
+        #game-board {
+            width: var(--board-size); height: var(--board-size);
+            display: grid; grid-template-columns: repeat(16, 1fr); grid-template-rows: repeat(16, 1fr);
+            background-color: var(--grid-candy); 
+            border: 8px solid var(--wall-candy);
+            border-radius: 4px;
+            position: relative;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.4);
+        }
+
+        /* 儀表板 */
+        .dashboard-section {
+            flex: 0 0 320px; display: flex; flex-direction: column; gap: 20px;
+            background: var(--panel-candy); padding: 30px; border-radius: 20px; border: 1px solid #4e3e5f;
+        }
+
+        .target-panel { text-align: center; padding-bottom: 20px; border-bottom: 2px solid #4e3e5f; }
+        .target-title { font-size: 0.8rem; color: #888; letter-spacing: 2px; }
+        #target-name { font-size: 2.2rem; font-weight: 900; margin: 10px 0; text-shadow: 1px 1px 2px rgba(0,0,0,0.3); }
+
+        .stats-panel { display: flex; justify-content: space-around; padding: 10px 0; }
+        .stat-item { text-align: center; }
+        .stat-value { font-size: 2.5rem; font-weight: bold; color: var(--accent-gold); }
+        .stat-label { font-size: 0.75rem; color: #bca0dc; font-weight: bold; }
+
+        .controls { display: grid; grid-template-columns: 1fr; gap: 10px; }
+        button {
+            padding: 14px; font-size: 0.9rem; font-weight: bold; border: none; border-radius: 10px;
+            cursor: pointer; transition: 0.2s; text-transform: uppercase;
+        }
+        .btn-undo { background: #564c67; color: #e1cfe1; border: 1px solid #6c5f81; }
+        .btn-restart { background: #ff7675; color: white; }
+        .btn-next { background: #52d681; color: #2a2035; }
+
+        button:hover { filter: brightness(1.1); transform: translateY(-2px); }
+
+        /* 格子與牆 */
+        .cell { position: relative; border: 0.5px solid var(--grid-line); }
+        .wall-top { border-top: 5px solid var(--wall-candy); }
+        .wall-left { border-left: 5px solid var(--wall-candy); }
+        .wall-bottom { border-bottom: 5px solid var(--wall-candy); }
+        .wall-right { border-right: 5px solid var(--wall-candy); }
+        .center-block { background-color: var(--wall-candy) !important; }
+
+        /* 機器人 - 更新：30% 灰色邊框與選取放大 */
+        .robot { 
+            width: 82%; height: 82%; border-radius: 50%; position: absolute;
+            top: 9%; left: 9%; z-index: 10; cursor: pointer;
+            border: 3px solid var(--rb-border); /* 30% 灰色邊框 */
+            box-shadow: 0 3px 6px rgba(0,0,0,0.2);
+            transition: all 0.15s cubic-bezier(0.18, 0.89, 0.32, 1.28);
+        }
+        
+        /* 選取狀態：變大 1.2 倍、強化發光 */
+        .robot.selected { 
+            transform: scale(1.2); 
+            z-index: 20; 
+            box-shadow: 0 0 15px rgba(255,255,255,0.6), 0 5px 15px rgba(0,0,0,0.3);
+            border-color: rgba(255,255,255,0.8); /* 選取時邊框變亮一點以示區別 */
+        }
+
+        /* 目標圖案 */
+        .target-icon { width: 65%; height: 65%; position: absolute; top: 17.5%; left: 17.5%; opacity: 0.9; pointer-events: none; }
+        .icon-sun { border-radius: 50%; border: 4px dashed currentColor; }
+        .icon-star { clip-path: polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%); background: currentColor; }
+        .icon-moon { border-radius: 50%; box-shadow: inset -7px 0 0 currentColor; }
+        .icon-triangle { clip-path: polygon(50% 0%, 0% 100%, 100% 100%); background: currentColor; }
+        .target-yellow { filter: drop-shadow(0 0 1px #634500); }
+
+        .swirl { border-radius: 50%; background: conic-gradient(var(--rb-red), var(--rb-yellow), var(--rb-green), var(--rb-blue), var(--rb-red)); animation: spin 5s linear infinite; opacity: 0.8;}
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+        @keyframes bounce { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.2); } }
+        .success-anim { animation: bounce 0.5s ease 2; }
+
+        /* 地圖切換面版 */
+        .map-selector-panel {
+            background: #2a2035;
+            border-radius: 12px;
+            padding: 12px 15px;
+            border: 1px solid #4e3e5f;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            align-items: center;
+            margin-top: 10px;
+        }
+        .map-input {
+            width: 100px;
+            padding: 8px 12px;
+            font-size: 1.1rem;
+            font-weight: bold;
+            text-align: center;
+            border: 2px solid #564c67;
+            border-radius: 8px;
+            background: #1f1728;
+            color: var(--accent-gold);
+            outline: none;
+            transition: all 0.2s;
+            text-transform: uppercase;
+        }
+        .map-input:focus {
+            border-color: var(--accent-gold);
+            box-shadow: 0 0 8px rgba(255, 214, 51, 0.4);
+        }
+        #map-name-display {
+            font-size: 0.75rem;
+            color: #bca0dc;
+            font-weight: bold;
+            margin-top: 2px;
+        }
+
+        /* 斜角有色牆壁 */
+        .diagonal-wall {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 2;
+        }
+        .diagonal-wall.slash {
+            background: linear-gradient(to top right, transparent calc(50% - 4px), var(--diag-color) calc(50% - 2px), var(--diag-color) calc(50% + 2px), transparent calc(50% + 4px));
+            filter: drop-shadow(0 0 2px var(--diag-color));
+        }
+        .diagonal-wall.backslash {
+            background: linear-gradient(to bottom right, transparent calc(50% - 4px), var(--diag-color) calc(50% - 2px), var(--diag-color) calc(50% + 2px), transparent calc(50% + 4px));
+            filter: drop-shadow(0 0 2px var(--diag-color));
+        }
+    </style>
+</head>
+<body>
+
+    <div class="main-container">
+        <div class="board-section">
+            <div id="game-board"></div>
+        </div>
+
+        <div class="dashboard-section">
+            <div class="target-panel">
+                <div class="target-title">下一個目標</div>
+                <div id="target-name">--</div>
+            </div>
+
+            <div class="map-selector-panel">
+                <div class="target-title">切換地圖 (A/B/C/D/O/+)</div>
+                <input type="text" id="map-input" maxlength="1" class="map-input" placeholder="O" value="O">
+                <div id="map-name-display">地圖：原預設地圖</div>
+                <button onclick="document.getElementById('game-file-input').click()" style="margin-top: 5px; width: 100%; padding: 8px; font-size: 0.8rem; background: #a29bfe; color: #2a2035; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;">匯入自訂地圖 (.json)</button>
+                <input type="file" id="game-file-input" accept=".json,.txt" style="display: none;" onchange="importCustomMapGame(this)">
+            </div>
+
+            <div class="stats-panel">
+                <div class="stat-item">
+                    <div id="count-num" class="stat-value">0</div>
+                    <div class="stat-label">本回合步數</div>
+                </div>
+                <div class="stat-item">
+                    <div id="total-targets" class="stat-value">0</div>
+                    <div class="stat-label">已解開目標</div>
+                </div>
+            </div>
+
+            <div class="controls">
+                <button class="btn-undo" onclick="undo()">上一步 (Z)</button>
+                <button class="btn-restart" onclick="restartLevel()">重開本關</button>
+                <button class="btn-next" onclick="skipLevel()">隨機排列機器人</button>
+            </div>
+
+            <div style="margin-top: 15px; color: #bca0dc; font-size: 0.8rem; line-height: 1.5; text-align: center;">
+                <b>【操作方式】</b> 方向鍵<br>
+                <b>【獲勝目標】</b> 移動同色機器人至目標位置<br>
+                （糖果漩渦適用於任何顏色的機器人）
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const COLORS = {
+            red: '#ff5e7e',
+            blue: '#4db8ff',
+            green: '#52d681',
+            yellow: '#ffb300' 
+        };
+
+        const MAP_SETS = {
+            O: {
+                name: '原預設地圖',
+                map: [
+                    [9, 1, 5, 1, 3, 9, 1, 1, 1, 3, 9, 1, 1, 1, 5, 3],
+                    [8, 2, 9, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 9, 2],
+                    [8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 12, 0, 0, 0, 2],
+                    [8, 0, 0, 0, 0, 2, 12, 0, 0, 0, 0, 1, 0, 0, 0, 6],
+                    [12, 0, 0, 0, 4, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 3],
+                    [9, 0, 0, 0, 3, 8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2],
+                    [8, 6, 8, 0, 0, 0, 0, 4, 4, 0, 4, 0, 0, 6, 8, 2],
+                    [8, 1, 0, 0, 0, 0, 2, 9, 3, 8, 3, 8, 0, 1, 0, 2],
+                    [8, 4, 0, 0, 0, 4, 2, 12, 6, 8, 0, 0, 0, 0, 0, 6],
+                    [8, 3, 8, 0, 2, 9, 0, 1, 5, 0, 0, 0, 0, 4, 0, 3],
+                    [12, 0, 0, 0, 0, 0, 0, 2, 9, 0, 0, 0, 2, 9, 0, 2],
+                    [9, 0, 0, 0, 0, 0, 0, 0, 0, 0, 6, 8, 0, 0, 0, 2],
+                    [8, 0, 0, 0, 0, 0, 6, 8, 0, 0, 1, 0, 0, 2, 12, 2],
+                    [8, 0, 0, 0, 0, 0, 1, 0, 0, 4, 0, 0, 0, 0, 1, 2],
+                    [8, 2, 12, 0, 0, 0, 0, 0, 0, 3, 8, 0, 0, 0, 0, 2],
+                    [12, 4, 5, 4, 4, 6, 12, 4, 4, 4, 4, 6, 12, 4, 4, 6]
+                ],
+                targets: [
+                    { name: '黃太陽', color: '#ffb300', robot: 'yellow', type: 'icon-sun', r: 1, c: 2 },
+                    { name: '黃星星', color: '#ffb300', robot: 'yellow', type: 'icon-star', r: 9, c: 1 },
+                    { name: '黃月亮', color: '#ffb300', robot: 'yellow', type: 'icon-moon', r: 7, c: 10 },
+                    { name: '黃三角', color: '#ffb300', robot: 'yellow', type: 'icon-triangle', r: 12, c: 14 },
+                    { name: '紅太陽', color: '#ff5e7e', robot: 'red', type: 'icon-sun', r: 12, c: 6 },
+                    { name: '紅星星', color: '#ff5e7e', robot: 'red', type: 'icon-star', r: 10, c: 13 },
+                    { name: '紅月亮', color: '#ff5e7e', robot: 'red', type: 'icon-moon', r: 5, c: 4 },
+                    { name: '紅三角', color: '#ff5e7e', robot: 'red', type: 'icon-triangle', r: 1, c: 14 },
+                    { name: '藍太陽', color: '#4db8ff', robot: 'blue', type: 'icon-sun', r: 14, c: 9 },
+                    { name: '藍星星', color: '#4db8ff', robot: 'blue', type: 'icon-star', r: 2, c: 11 },
+                    { name: '藍月亮', color: '#4db8ff', robot: 'blue', type: 'icon-moon', r: 9, c: 5 },
+                    { name: '藍三角', color: '#4db8ff', robot: 'blue', type: 'icon-triangle', r: 3, c: 6 },
+                    { name: '綠太陽', color: '#52d681', robot: 'green', type: 'icon-sun', r: 6, c: 13 },
+                    { name: '綠星星', color: '#52d681', robot: 'green', type: 'icon-star', r: 6, c: 1 },
+                    { name: '綠月亮', color: '#52d681', robot: 'green', type: 'icon-moon', r: 11, c: 10 },
+                    { name: '綠三角', color: '#52d681', robot: 'green', type: 'icon-triangle', r: 14, c: 2 },
+                    { name: '糖果漩渦', color: 'swirl', robot: 'any', type: 'swirl', r: 10, c: 8 }
+                ]
+            },
+            A: {
+                name: '1A2A3A4A',
+                map: [
+                    [9,1,1,3,9,1,1,1,1,3,9,1,1,1,1,3],
+                    [8,0,0,0,0,6,8,0,0,0,0,0,0,6,8,6],
+                    [10,12,0,0,0,1,0,0,0,4,0,0,0,1,0,3],
+                    [12,1,0,0,0,0,4,0,2,9,0,0,0,0,4,2],
+                    [9,0,0,0,0,2,9,0,0,0,0,0,0,0,3,10],
+                    [8,0,4,0,0,0,0,0,0,0,0,0,0,0,0,2],
+                    [8,0,3,8,0,0,0,4,4,0,0,2,12,0,0,2],
+                    [8,0,0,0,0,0,2,9,3,8,0,0,1,0,0,2],
+                    [8,0,0,0,0,6,10,12,6,8,0,0,0,0,0,6],
+                    [8,0,4,0,0,1,0,1,5,0,0,0,0,4,0,3],
+                    [8,0,3,8,0,0,0,2,9,0,0,0,2,9,0,2],
+                    [12,0,0,0,0,0,0,0,0,0,6,8,0,0,0,2],
+                    [9,0,0,0,4,0,0,0,0,0,1,0,0,2,12,2],
+                    [8,0,0,2,9,0,0,0,0,4,0,0,0,0,1,2],
+                    [8,0,0,0,0,2,12,0,0,3,8,0,0,0,0,2],
+                    [12,4,4,4,6,12,5,4,4,4,4,6,12,4,4,6]
+                ],
+                targets: [
+                    { name: '黃三角', color: '#ffb300', robot: 'yellow', type: 'icon-triangle', r: 12, c: 14 },
+                    { name: '紅星星', color: '#ff5e7e', robot: 'red', type: 'icon-star', r: 10, c: 13 },
+                    { name: '藍太陽', color: '#4db8ff', robot: 'blue', type: 'icon-sun', r: 14, c: 9 },
+                    { name: '綠月亮', color: '#52d681', robot: 'green', type: 'icon-moon', r: 11, c: 10 },
+                    { name: '糖果漩渦', color: 'swirl', robot: 'any', type: 'swirl', r: 10, c: 8 },
+                    { name: '綠三角', color: '#52d681', robot: 'green', type: 'icon-triangle', r: 1, c: 13 },
+                    { name: '紅太陽', color: '#ff5e7e', robot: 'red', type: 'icon-sun', r: 4, c: 14 },
+                    { name: '藍月亮', color: '#4db8ff', robot: 'blue', type: 'icon-moon', r: 3, c: 9 },
+                    { name: '黃太陽', color: '#ffb300', robot: 'yellow', type: 'icon-sun', r: 4, c: 6 },
+                    { name: '黃星星', color: '#ffb300', robot: 'yellow', type: 'icon-star', r: 6, c: 12 },
+                    { name: '紅月亮', color: '#ff5e7e', robot: 'red', type: 'icon-moon', r: 2, c: 1 },
+                    { name: '綠星星', color: '#52d681', robot: 'green', type: 'icon-star', r: 1, c: 5 },
+                    { name: '藍三角', color: '#4db8ff', robot: 'blue', type: 'icon-triangle', r: 6, c: 2 },
+                    { name: '紅三角', color: '#ff5e7e', robot: 'red', type: 'icon-triangle', r: 8, c: 5 },
+                    { name: '黃月亮', color: '#ffb300', robot: 'yellow', type: 'icon-moon', r: 14, c: 6 },
+                    { name: '綠太陽', color: '#52d681', robot: 'green', type: 'icon-sun', r: 13, c: 4 },
+                    { name: '藍星星', color: '#4db8ff', robot: 'blue', type: 'icon-star', r: 10, c: 2 }
+                ]
+            },
+            B: {
+                name: '3B2B1B4B',
+                map: [
+                    [9,1,5,1,3,9,1,1,1,3,9,1,1,1,5,3],
+                    [8,2,9,0,0,0,0,0,0,0,0,0,0,2,9,2],
+                    [8,0,0,0,0,0,0,0,0,0,2,12,0,0,0,2],
+                    [8,0,0,0,0,2,12,0,0,0,0,1,0,0,0,6],
+                    [12,0,0,0,4,0,1,0,0,0,0,0,0,0,0,3],
+                    [9,0,0,0,3,8,0,0,0,0,0,0,0,0,0,2],
+                    [8,6,8,0,0,0,0,4,4,0,4,0,0,6,8,2],
+                    [8,1,0,0,0,0,2,9,3,8,3,8,4,1,0,2],
+                    [8,4,0,0,0,4,2,12,6,8,0,2,9,0,0,2],
+                    [8,3,8,0,2,9,0,1,1,2,12,0,0,0,0,2],
+                    [12,0,0,0,0,0,0,0,0,0,1,0,0,0,0,6],
+                    [9,0,0,0,0,0,0,0,0,6,8,0,0,0,4,3],
+                    [8,0,0,0,0,0,6,8,0,1,0,0,0,0,3,10],
+                    [8,0,0,0,0,0,1,0,0,0,0,0,0,4,0,2],
+                    [8,2,12,0,0,0,0,0,0,0,0,0,2,9,0,2],
+                    [12,4,5,4,4,6,12,4,4,4,6,12,4,4,4,6]
+                ],
+                targets: [
+                    { name: '黃太陽', color: '#ffb300', robot: 'yellow', type: 'icon-sun', r: 1, c: 2 },
+                    { name: '黃星星', color: '#ffb300', robot: 'yellow', type: 'icon-star', r: 9, c: 1 },
+                    { name: '黃月亮', color: '#ffb300', robot: 'yellow', type: 'icon-moon', r: 7, c: 10 },
+                    { name: '紅太陽', color: '#ff5e7e', robot: 'red', type: 'icon-sun', r: 12, c: 6 },
+                    { name: '紅月亮', color: '#ff5e7e', robot: 'red', type: 'icon-moon', r: 5, c: 4 },
+                    { name: '紅三角', color: '#ff5e7e', robot: 'red', type: 'icon-triangle', r: 1, c: 14 },
+                    { name: '藍星星', color: '#4db8ff', robot: 'blue', type: 'icon-star', r: 2, c: 11 },
+                    { name: '藍月亮', color: '#4db8ff', robot: 'blue', type: 'icon-moon', r: 9, c: 5 },
+                    { name: '藍三角', color: '#4db8ff', robot: 'blue', type: 'icon-triangle', r: 3, c: 6 },
+                    { name: '綠太陽', color: '#52d681', robot: 'green', type: 'icon-sun', r: 6, c: 13 },
+                    { name: '綠星星', color: '#52d681', robot: 'green', type: 'icon-star', r: 6, c: 1 },
+                    { name: '綠三角', color: '#52d681', robot: 'green', type: 'icon-triangle', r: 14, c: 2 },
+                    { name: '紅太陽', color: '#ff5e7e', robot: 'red', type: 'icon-sun', r: 14, c: 13 },
+                    { name: '綠月亮', color: '#52d681', robot: 'green', type: 'icon-moon', r: 12, c: 14 },
+                    { name: '黃三角', color: '#ffb300', robot: 'yellow', type: 'icon-triangle', r: 11, c: 9 },
+                    { name: '藍太陽', color: '#4db8ff', robot: 'blue', type: 'icon-sun', r: 9, c: 10 },
+                    { name: '糖果漩渦', color: 'swirl', robot: 'any', type: 'swirl', r: 8, c: 12 }
+                ]
+            },
+            C: {
+                name: '1C2C3C4C',
+                map: [
+                    [9,1,1,1,1,3,9,1,3,9,1,5,1,1,1,3],
+                    [8,0,0,4,0,0,0,0,0,0,2,9,0,0,0,6],
+                    [8,0,2,9,0,0,0,0,0,0,0,0,0,0,4,3],
+                    [12,0,4,0,2,12,0,0,0,0,0,0,0,0,3,10],
+                    [9,0,3,8,0,1,0,0,0,6,8,0,0,0,0,2],
+                    [8,0,0,0,6,8,0,0,0,1,0,0,0,0,0,2],
+                    [8,0,0,0,1,0,0,4,4,0,0,2,12,0,0,2],
+                    [8,0,0,0,0,0,2,9,3,8,0,0,1,0,0,2],
+                    [8,0,0,0,0,0,2,12,6,8,0,0,0,0,0,2],
+                    [8,0,0,0,0,0,0,1,1,0,0,0,0,2,12,2],
+                    [8,4,0,0,2,12,0,0,0,6,8,0,4,0,1,2],
+                    [10,9,0,0,0,1,4,0,0,1,0,2,9,0,0,6],
+                    [8,0,0,0,0,0,3,8,4,0,0,0,0,0,0,3],
+                    [12,0,0,0,0,0,0,2,9,0,4,0,0,0,0,2],
+                    [9,0,0,6,8,0,0,0,0,0,3,8,0,0,0,2],
+                    [12,4,4,5,4,6,12,4,4,4,4,4,6,12,4,6]
+                ],
+                targets: [
+                    { name: '綠三角', color: '#52d681', robot: 'green', type: 'icon-triangle', r: 3, c: 14 },
+                    { name: '紅太陽', color: '#ff5e7e', robot: 'red', type: 'icon-sun', r: 1, c: 11 },
+                    { name: '藍三角', color: '#4db8ff', robot: 'blue', type: 'icon-triangle', r: 3, c: 5 },
+                    { name: '黃太陽', color: '#ffb300', robot: 'yellow', type: 'icon-sun', r: 2, c: 3 },
+                    { name: '紅月亮', color: '#ff5e7e', robot: 'red', type: 'icon-moon', r: 4, c: 2 },
+                    { name: '綠星星', color: '#52d681', robot: 'green', type: 'icon-star', r: 5, c: 4 },
+                    { name: '黃星星', color: '#ffb300', robot: 'yellow', type: 'icon-star', r: 6, c: 12 },
+                    { name: '黃三角', color: '#ffb300', robot: 'yellow', type: 'icon-triangle', r: 9, c: 14 },
+                    { name: '紅星星', color: '#ff5e7e', robot: 'red', type: 'icon-star', r: 11, c: 12 },
+                    { name: '藍太陽', color: '#4db8ff', robot: 'blue', type: 'icon-sun', r: 14, c: 10 },
+                    { name: '糖果漩渦', color: 'swirl', robot: 'any', type: 'swirl', r: 13, c: 8 },
+                    { name: '藍星星', color: '#4db8ff', robot: 'blue', type: 'icon-star', r: 12, c: 6 },
+                    { name: '藍月亮', color: '#4db8ff', robot: 'blue', type: 'icon-moon', r: 4, c: 9 },
+                    { name: '紅三角', color: '#ff5e7e', robot: 'red', type: 'icon-triangle', r: 14, c: 3 },
+                    { name: '黃月亮', color: '#ffb300', robot: 'yellow', type: 'icon-moon', r: 10, c: 5 },
+                    { name: '綠太陽', color: '#52d681', robot: 'green', type: 'icon-sun', r: 11, c: 1 },
+                    { name: '綠月亮', color: '#52d681', robot: 'green', type: 'icon-moon', r: 10, c: 9 }
+                ]
+            },
+            D: {
+                name: '1D2D3D4D',
+                map: [
+                    [9,1,3,9,1,1,1,1,1,3,9,1,5,1,1,3],
+                    [8,0,0,0,0,0,4,0,0,0,0,0,3,8,0,2],
+                    [8,0,0,0,0,6,9,0,0,6,8,0,0,0,0,2],
+                    [8,0,0,0,0,1,0,0,2,9,0,0,0,0,0,2],
+                    [8,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2],
+                    [10,12,0,0,0,0,0,0,0,0,0,0,0,0,0,6],
+                    [12,1,0,0,4,0,0,4,4,0,2,12,0,0,0,3],
+                    [9,0,0,0,3,8,2,9,3,8,4,1,0,0,0,2],
+                    [8,0,4,0,0,0,2,12,6,10,9,0,0,0,0,6],
+                    [8,0,3,8,0,0,0,1,1,0,0,0,0,0,4,3],
+                    [12,0,0,0,0,2,12,0,0,0,0,0,0,2,9,2],
+                    [9,0,0,0,0,0,1,0,0,0,0,0,4,0,0,2],
+                    [8,0,0,0,6,8,0,0,0,0,0,0,3,12,0,2],
+                    [8,0,0,2,9,0,0,0,0,6,8,0,0,1,0,2],
+                    [8,0,0,0,0,0,0,0,0,1,0,0,0,0,0,2],
+                    [12,4,6,12,4,4,4,4,4,4,6,12,4,4,4,6]
+                ],
+                targets: [
+                    { name: '紅星星', color: '#ff5e7e', robot: 'red', type: 'icon-star', r: 10, c: 14 },
+                    { name: '藍太陽', color: '#4db8ff', robot: 'blue', type: 'icon-sun', r: 12, c: 13 },
+                    { name: '綠月亮', color: '#52d681', robot: 'green', type: 'icon-moon', r: 12, c: 12 },
+                    { name: '黃三角', color: '#ffb300', robot: 'yellow', type: 'icon-triangle', r: 13, c: 9 },
+                    { name: '糖果漩渦', color: 'swirl', robot: 'any', type: 'swirl', r: 8, c: 10 },
+                    { name: '黃星星', color: '#ffb300', robot: 'yellow', type: 'icon-star', r: 6, c: 11 },
+                    { name: '紅太陽', color: '#ff5e7e', robot: 'red', type: 'icon-sun', r: 1, c: 12 },
+                    { name: '藍月亮', color: '#4db8ff', robot: 'blue', type: 'icon-moon', r: 3, c: 9 },
+                    { name: '綠三角', color: '#52d681', robot: 'green', type: 'icon-triangle', r: 2, c: 9 },
+                    { name: '黃太陽', color: '#ffb300', robot: 'yellow', type: 'icon-sun', r: 2, c: 6 },
+                    { name: '綠星星', color: '#52d681', robot: 'green', type: 'icon-star', r: 2, c: 5 },
+                    { name: '藍三角', color: '#4db8ff', robot: 'blue', type: 'icon-triangle', r: 7, c: 4 },
+                    { name: '紅月亮', color: '#ff5e7e', robot: 'red', type: 'icon-moon', r: 5, c: 1 },
+                    { name: '黃月亮', color: '#ffb300', robot: 'yellow', type: 'icon-moon', r: 10, c: 6 },
+                    { name: '藍星星', color: '#4db8ff', robot: 'blue', type: 'icon-star', r: 9, c: 2 },
+                    { name: '綠太陽', color: '#52d681', robot: 'green', type: 'icon-sun', r: 13, c: 4 },
+                    { name: '紅三角', color: '#ff5e7e', robot: 'red', type: 'icon-triangle', r: 12, c: 4 }
+                ]
+            },
+            '+': {
+                name: '1D2D3D4D+',
+                map: [
+                    [9, 1, 1, 1, 1, 3, 9, 1, 3, 9, 1, 1, 1, 1, 1, 3],
+                    [8, 0, 0, 0, 160, 0, 0, 0, 0, 2, 12, 0, 0, 0, 0, 2],
+                    [8, 4, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 6, 8, 32, 2],
+                    [10, 9, 0, 0, 0, 0, 0, 0, 0, 160, 0, 2, 9, 0, 0, 2],
+                    [8, 0, 0, 0, 0, 0, 6, 8, 0, 0, 0, 0, 0, 0, 0, 6],
+                    [12, 0, 4, 0, 0, 0, 1, 2, 12, 0, 0, 0, 0, 4, 0, 3],
+                    [9, 0, 3, 12, 0, 0, 0, 4, 5, 0, 0, 0, 0, 3, 8, 2],
+                    [8, 0, 0, 1, 0, 208, 2, 9, 3, 8, 0, 0, 0, 0, 0, 2],
+                    [8, 0, 0, 0, 32, 0, 2, 12, 6, 8, 0, 0, 0, 0, 0, 2],
+                    [8, 2, 12, 0, 0, 0, 0, 1, 1, 0, 6, 8, 0, 0, 0, 2],
+                    [8, 0, 3, 8, 0, 0, 0, 4, 0, 0, 1, 0, 4, 0, 0, 2],
+                    [8, 0, 0, 0, 0, 0, 2, 9, 0, 0, 0, 0, 3, 12, 0, 2],
+                    [12, 0, 0, 0, 0, 0, 0, 0, 0, 212, 0, 0, 0, 1, 0, 6],
+                    [9, 80, 0, 0, 0, 0, 0, 0, 2, 9, 0, 0, 0, 0, 0, 3],
+                    [8, 0, 0, 0, 0, 6, 8, 0, 0, 0, 0, 80, 0, 0, 0, 2],
+                    [12, 4, 4, 4, 4, 5, 6, 12, 4, 4, 6, 12, 4, 4, 4, 6]
+                ],
+                targets: [
+                    { name: '黃三角', color: '#ffb300', robot: 'yellow', type: 'icon-triangle', r: 6, c: 13 },
+                    { name: '藍太陽', color: '#4db8ff', robot: 'blue', type: 'icon-sun', r: 2, c: 12 },
+                    { name: '綠月亮', color: '#52d681', robot: 'green', type: 'icon-moon', r: 3, c: 12 },
+                    { name: '紅星星', color: '#ff5e7e', robot: 'red', type: 'icon-star', r: 1, c: 10 },
+                    { name: '糖果漩渦', color: 'swirl', robot: 'any', type: 'swirl', r: 5, c: 8 },
+                    { name: '黃星星', color: '#ffb300', robot: 'yellow', type: 'icon-star', r: 4, c: 6 },
+                    { name: '紅太陽', color: '#ff5e7e', robot: 'red', type: 'icon-sun', r: 3, c: 1 },
+                    { name: '藍月亮', color: '#4db8ff', robot: 'blue', type: 'icon-moon', r: 6, c: 3 },
+                    { name: '綠三角', color: '#52d681', robot: 'green', type: 'icon-triangle', r: 6, c: 2 },
+                    { name: '黃太陽', color: '#ffb300', robot: 'yellow', type: 'icon-sun', r: 9, c: 2 },
+                    { name: '綠星星', color: '#52d681', robot: 'green', type: 'icon-star', r: 10, c: 2 },
+                    { name: '紅月亮', color: '#ff5e7e', robot: 'red', type: 'icon-moon', r: 14, c: 5 },
+                    { name: '藍星星', color: '#4db8ff', robot: 'blue', type: 'icon-star', r: 13, c: 9 },
+                    { name: '藍三角', color: '#4db8ff', robot: 'blue', type: 'icon-triangle', r: 11, c: 7 },
+                    { name: '綠太陽', color: '#52d681', robot: 'green', type: 'icon-sun', r: 11, c: 13 },
+                    { name: '紅三角', color: '#ff5e7e', robot: 'red', type: 'icon-triangle', r: 11, c: 12 },
+                    { name: '黃月亮', color: '#ffb300', robot: 'yellow', type: 'icon-moon', r: 9, c: 10 }
+                ]
+            }
+        };
+
+        let MAP_DATA = [];
+        let TARGET_DATA = [];
+
+        let robots = [
+            { id: 'red', r: 0, c: 0, color: COLORS.red },
+            { id: 'blue', r: 0, c: 15, color: COLORS.blue },
+            { id: 'green', r: 15, c: 0, color: COLORS.green },
+            { id: 'yellow', r: 15, c: 15, color: COLORS.yellow }
+        ];
+
+        let currentTarget, selectedRobot = null, moveCount = 0, solvedCount = 0;
+        let history = [], turnInitialPos = [];
+
+        function loadMap(key) {
+            const upKey = key.toUpperCase();
+            if (!MAP_SETS[upKey]) return;
+
+            MAP_DATA = MAP_SETS[upKey].map;
+            TARGET_DATA = MAP_SETS[upKey].targets;
+
+            const board = document.getElementById('game-board');
+            board.innerHTML = '';
+            for(let r=0; r<16; r++) {
+                for(let c=0; c<16; c++) {
+                    const cell = document.createElement('div');
+                    cell.className = 'cell'; cell.id = `cell-${r}-${c}`;
+                    const v = MAP_DATA[r][c];
+                    if(v & 1) cell.classList.add('wall-top');
+                    if(v & 2) cell.classList.add('wall-right');
+                    if(v & 4) cell.classList.add('wall-bottom');
+                    if(v & 8) cell.classList.add('wall-left');
+                    if((r===7||r===8)&&(c===7||c===8)) cell.classList.add('center-block');
+
+                    // 繪製斜角牆
+                    const diagType = (v >> 4) & 3;
+                    const diagColorIdx = (v >> 6) & 3;
+                    if (diagType > 0) {
+                        const diagWall = document.createElement('div');
+                        diagWall.className = `diagonal-wall ${diagType === 1 ? 'slash' : 'backslash'}`;
+                        const colorsList = ['red', 'blue', 'green', 'yellow'];
+                        const colorKey = colorsList[diagColorIdx];
+                        diagWall.style.setProperty('--diag-color', COLORS[colorKey]);
+                        cell.appendChild(diagWall);
+                    }
+
+                    const t = TARGET_DATA.find(x => x.r === r && x.c === c);
+                    if(t) {
+                        const icon = document.createElement('div');
+                        icon.className = `target-icon ${t.type} ${t.color === COLORS.yellow || t.color === '#ffb300' ? 'target-yellow' : ''}`;
+                        if(t.color !== 'swirl') icon.style.color = t.color;
+                        cell.appendChild(icon);
+                    }
+                    board.appendChild(cell);
+                }
+            }
+
+            // 建立並附加 SVG 軌跡層
+            const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+            svg.id = 'trajectory-svg';
+            svg.setAttribute('viewBox', '0 0 16 16');
+            svg.style.position = 'absolute';
+            svg.style.top = '0';
+            svg.style.left = '0';
+            svg.style.width = '100%';
+            svg.style.height = '100%';
+            svg.style.pointerEvents = 'none';
+            svg.style.zIndex = '5';
+            svg.innerHTML = `
+                <defs>
+                    <filter id="glow" filterUnits="userSpaceOnUse" x="0" y="0" width="16" height="16">
+                        <feGaussianBlur stdDeviation="0.12" result="blur" />
+                        <feComposite in="SourceGraphic" in2="blur" operator="over" />
+                    </filter>
+                </defs>
+            `;
+            board.appendChild(svg);
+
+            // Update Input and display
+            const mapInput = document.getElementById('map-input');
+            if (mapInput && mapInput.value.toUpperCase() !== upKey) {
+                mapInput.value = upKey === 'CUSTOM' ? '' : upKey;
+            }
+            const mapNameDisplay = document.getElementById('map-name-display');
+            if (mapNameDisplay) {
+                mapNameDisplay.innerText = `地圖：${MAP_SETS[upKey].name}`;
+            }
+
+            // Reset level state
+            solvedCount = 0;
+            moveCount = 0;
+            history = [];
+            selectedRobot = null;
+
+            document.getElementById('total-targets').innerText = solvedCount;
+            document.getElementById('count-num').innerText = moveCount;
+
+            randomizeRobots();
+            pickTarget();
+            drawTrajectories();
+        }
+
+        function importCustomMapGame(input) {
+            const file = input.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const parsed = JSON.parse(e.target.result);
+                    if (parsed.map && Array.isArray(parsed.map) && parsed.targets && Array.isArray(parsed.targets)) {
+                        let mapName = parsed.name || file.name.substring(0, file.name.lastIndexOf('.')) || '自訂地圖';
+                        MAP_SETS['CUSTOM'] = {
+                            name: mapName,
+                            map: parsed.map,
+                            targets: parsed.targets
+                        };
+                        loadMap('CUSTOM');
+                    } else {
+                        alert('檔案格式錯誤，必須包含地圖與目標數據。');
+                    }
+                } catch(err) {
+                    alert('無法解析檔案內容，請確保它是合法的地圖 JSON 文字格式。');
+                }
+            };
+            reader.readAsText(file);
+        }
+
+        function init() {
+            const mapInput = document.getElementById('map-input');
+            mapInput.addEventListener('input', (e) => {
+                const val = e.target.value.trim().toUpperCase();
+                if (['A', 'B', 'C', 'D', 'O', '+'].includes(val)) {
+                    loadMap(val);
+                }
+            });
+            loadMap('O');
+        }
+
+        function randomizeRobots() {
+            const forbidden = TARGET_DATA.map(t => `${t.r}-${t.c}`);
+            for(let i=7; i<=8; i++) for(let j=7; j<=8; j++) forbidden.push(`${i}-${j}`);
+            robots.forEach(rb => {
+                let r, c;
+                do {
+                    r = Math.floor(Math.random()*16); c = Math.floor(Math.random()*16);
+                } while (forbidden.includes(`${r}-${c}`) || robots.some(o => o !== rb && o.r === r && o.c === c));
+                rb.r = r; rb.c = c;
+            });
+            turnInitialPos = JSON.parse(JSON.stringify(robots));
+            renderRobots();
+        }
+
+        function renderRobots() {
+            document.querySelectorAll('.robot').forEach(el => el.remove());
+            robots.forEach(rb => {
+                const cell = document.getElementById(`cell-${rb.r}-${rb.c}`);
+                const div = document.createElement('div');
+                div.className = 'robot' + (selectedRobot === rb ? ' selected' : '');
+                div.style.backgroundColor = rb.color;
+                div.onclick = (e) => { e.stopPropagation(); selectedRobot = rb; renderRobots(); };
+                cell.appendChild(div);
+            });
+        }
+
+        function pickTarget() {
+            let next;
+            do {
+                next = TARGET_DATA[Math.floor(Math.random()*TARGET_DATA.length)];
+            } while (
+                next === currentTarget ||
+                robots.some(rb => rb.r === next.r && rb.c === next.c && (next.robot === 'any' || rb.id === next.robot))
+            );
+            currentTarget = next;
+            const nameEl = document.getElementById('target-name');
+            nameEl.innerText = currentTarget.name;
+            nameEl.style.color = currentTarget.color === 'swirl' ? '#fff' : currentTarget.color;
+            nameEl.classList.remove('success-anim');
+        }
+
+        function move(dir) {
+            if(!selectedRobot) return;
+            const from = {r: selectedRobot.r, c: selectedRobot.c};
+            let r = from.r, c = from.c;
+            
+            const getOffset = (d) => {
+                return {
+                    'top': [-1,0,1,4],
+                    'right': [0,1,2,8],
+                    'bottom': [1,0,4,1],
+                    'left': [0,-1,8,2]
+                }[d];
+            };
+            
+            let offset = getOffset(dir);
+            const visited = new Set();
+            const path = [{r: r, c: c}];
+            
+            while(true) {
+                const stateKey = `${r},${c},${dir}`;
+                if (visited.has(stateKey)) break;
+                visited.add(stateKey);
+
+                if(MAP_DATA[r][c] & offset[2]) break;
+                let nr = r + offset[0], nc = c + offset[1];
+                if(nr < 0 || nr > 15 || nc < 0 || nc > 15 || (nr>=7 && nr<=8 && nc>=7 && nc<=8) || robots.some(o => o.r === nr && o.c === nc)) break;
+                
+                if(MAP_DATA[nr][nc] & offset[3]) break;
+                r = nr; c = nc;
+                path.push({r: r, c: c});
+                
+                // 檢查此格子是否有斜角牆反射
+                const v = MAP_DATA[r][c];
+                const diagType = (v >> 4) & 3;
+                const diagColorIdx = (v >> 6) & 3;
+                
+                if (diagType > 0) {
+                    const colorsList = ['red', 'blue', 'green', 'yellow'];
+                    const wallColor = colorsList[diagColorIdx];
+                    // 如果機器人顏色與牆壁不同，則折射
+                    if (selectedRobot.id !== wallColor) {
+                        if (diagType === 2) { // slash / (2 代表 slash)
+                            if (dir === 'top') dir = 'right';
+                            else if (dir === 'bottom') dir = 'left';
+                            else if (dir === 'left') dir = 'bottom';
+                            else if (dir === 'right') dir = 'top';
+                        } else if (diagType === 1) { // backslash \ (1 代表 backslash)
+                            if (dir === 'top') dir = 'left';
+                            else if (dir === 'bottom') dir = 'right';
+                            else if (dir === 'left') dir = 'top';
+                            else if (dir === 'right') dir = 'bottom';
+                        }
+                        offset = getOffset(dir);
+                    }
+                }
+            }
+
+            if(r !== from.r || c !== from.c) {
+                history.push({id: selectedRobot.id, from: {...from}, path: path});
+                selectedRobot.r = r; selectedRobot.c = c;
+                moveCount++;
+                updateUI();
+                checkWin();
+            }
+        }
+
+        function checkWin() {
+            if(selectedRobot.r === currentTarget.r && selectedRobot.c === currentTarget.c) {
+                if(currentTarget.robot === 'any' || selectedRobot.id === currentTarget.robot) {
+                    solvedCount++;
+                    document.getElementById('total-targets').innerText = solvedCount;
+                    document.getElementById('target-name').classList.add('success-anim');
+                    
+                    const activeRb = selectedRobot;
+                    selectedRobot = null;
+                    
+                    setTimeout(() => {
+                        moveCount = 0;
+                        document.getElementById('count-num').innerText = "0";
+                        history = [];
+                        turnInitialPos = JSON.parse(JSON.stringify(robots));
+                        selectedRobot = activeRb;
+                        pickTarget();
+                        renderRobots();
+                        drawTrajectories();
+                    }, 800);
+                }
+            }
+        }
+
+        function undo() {
+            if(history.length === 0) return;
+            const last = history.pop();
+            const rb = robots.find(x => x.id === last.id);
+            rb.r = last.from.r; rb.c = last.from.c;
+            moveCount--;
+            updateUI();
+        }
+
+        function restartLevel() {
+            robots = JSON.parse(JSON.stringify(turnInitialPos));
+            moveCount = 0;
+            history = [];
+            selectedRobot = null;
+            updateUI();
+        }
+
+        function skipLevel() {
+            randomizeRobots();
+            moveCount = 0;
+            history = [];
+            selectedRobot = null;
+            updateUI();
+            pickTarget();
+        }
+
+        function updateUI() {
+            document.getElementById('count-num').innerText = moveCount;
+            renderRobots();
+            drawTrajectories();
+        }
+
+        // 繪製軌跡線的 SVG 函數
+        function drawTrajectories() {
+            const svg = document.getElementById('trajectory-svg');
+            if (!svg) return;
+            
+            // 清除現有的軌跡路徑與圓點
+            const trails = svg.querySelectorAll('path, circle');
+            trails.forEach(t => t.remove());
+
+            if (history.length === 0) return;
+
+            history.forEach((move) => {
+                if (!move.path || move.path.length < 2) return;
+
+                // 畫出移動路徑
+                const pathEl = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                let d = `M ${move.path[0].c + 0.5} ${move.path[0].r + 0.5}`;
+                for (let i = 1; i < move.path.length; i++) {
+                    d += ` L ${move.path[i].c + 0.5} ${move.path[i].r + 0.5}`;
+                }
+
+                pathEl.setAttribute('d', d);
+                const color = COLORS[move.id] || '#fff';
+                pathEl.setAttribute('stroke', color);
+                pathEl.setAttribute('stroke-width', '0.12');
+                pathEl.setAttribute('stroke-linecap', 'round');
+                pathEl.setAttribute('stroke-linejoin', 'round');
+                pathEl.setAttribute('fill', 'none');
+                pathEl.setAttribute('opacity', '0.75');
+                pathEl.setAttribute('filter', 'url(#glow)');
+                
+                svg.appendChild(pathEl);
+
+                // 畫出該步起點的圓點
+                const startCircle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                startCircle.setAttribute('cx', move.path[0].c + 0.5);
+                startCircle.setAttribute('cy', move.path[0].r + 0.5);
+                startCircle.setAttribute('r', '0.08');
+                startCircle.setAttribute('fill', color);
+                startCircle.setAttribute('opacity', '0.85');
+                svg.appendChild(startCircle);
+            });
+        }
+
+        window.onload = init;
+        window.onkeydown = (e) => {
+            if (document.activeElement.tagName === 'INPUT') return;
+            const k = {'arrowup':'top','arrowdown':'bottom','arrowleft':'left','arrowright':'right'}[e.key.toLowerCase()];
+            if(k) { e.preventDefault(); move(k); }
+            if(e.key.toLowerCase() === 'z') undo();
+        };
+    </script>
+</body>
+</html>
