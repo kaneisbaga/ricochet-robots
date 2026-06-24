@@ -1,0 +1,740 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>反射軌跡v2.6 - 地圖編輯器</title>
+    <style>
+        :root {
+            --bg-candy: #2a2035; 
+            --panel-candy: #3b2f4a; 
+            --grid-candy: #fcfaf0; /* 奶油白底盤 */
+            --grid-line: #e0dbd1; 
+            --wall-candy: #4a3b30; /* 巧克力深棕牆壁 */
+            
+            --rb-red: #ff5e7e;    
+            --rb-blue: #4db8ff;   
+            --rb-green: #52d681;  
+            --rb-yellow: #ffb300; 
+            
+            --accent-gold: #ffd633;
+            --board-size: 82vh;
+            --accent-purple: #a29bfe;
+        }
+
+        * { box-sizing: border-box; font-family: 'Segoe UI', 'Microsoft JhengHei', sans-serif; }
+
+        body {
+            background-color: var(--bg-candy); color: #fdfaf5;
+            margin: 0; height: 100vh; display: flex; justify-content: center; align-items: center; overflow: hidden;
+        }
+
+        .main-container {
+            display: flex; gap: 40px; padding: 20px; width: 100%; height: 100vh; align-items: center; justify-content: center;
+        }
+
+        /* 棋盤 */
+        .board-section { flex: 0 0 var(--board-size); }
+        #editor-board {
+            width: var(--board-size); height: var(--board-size);
+            display: grid; grid-template-columns: repeat(16, 1fr); grid-template-rows: repeat(16, 1fr);
+            background-color: var(--grid-candy); 
+            border: 8px solid var(--wall-candy);
+            border-radius: 4px;
+            position: relative;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.4);
+        }
+
+        /* 儀表板 / 側邊欄 */
+        .editor-panel {
+            flex: 0 0 350px; display: flex; flex-direction: column; gap: 15px;
+            background: var(--panel-candy); padding: 25px; border-radius: 20px; border: 1px solid #4e3e5f;
+            height: var(--board-size); overflow-y: auto;
+        }
+
+        .panel-title {
+            text-align: center; font-size: 1.4rem; font-weight: bold;
+            color: var(--accent-gold); border-bottom: 2px solid #4e3e5f; padding-bottom: 10px; margin: 0;
+        }
+
+        .section-title {
+            font-size: 0.85rem; color: #bca0dc; font-weight: bold; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 1px;
+        }
+
+        .control-group {
+            background: rgba(255,255,255,0.05); padding: 12px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.03);
+        }
+
+        /* 格子與牆壁的樣式 */
+        .cell {
+            position: relative; border: 0.5px solid var(--grid-line); cursor: pointer;
+            transition: background-color 0.15s;
+        }
+        .cell:hover {
+            background-color: rgba(162, 155, 254, 0.15);
+        }
+        .cell.selected {
+            background-color: rgba(255, 214, 51, 0.2) !important;
+            outline: 2px solid var(--accent-gold);
+            outline-offset: -2px;
+            z-index: 5;
+        }
+
+        .wall-top { border-top: 5px solid var(--wall-candy); }
+        .wall-left { border-left: 5px solid var(--wall-candy); }
+        .wall-bottom { border-bottom: 5px solid var(--wall-candy); }
+        .wall-right { border-right: 5px solid var(--wall-candy); }
+        .center-block { background-color: var(--wall-candy) !important; }
+
+        /* 目標圖案 */
+        .target-icon { width: 65%; height: 65%; position: absolute; top: 17.5%; left: 17.5%; opacity: 0.9; pointer-events: none; }
+        .icon-sun { border-radius: 50%; border: 4px dashed currentColor; }
+        .icon-star { clip-path: polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%); background: currentColor; }
+        .icon-moon { border-radius: 50%; box-shadow: inset -7px 0 0 currentColor; }
+        .icon-triangle { clip-path: polygon(50% 0%, 0% 100%, 100% 100%); background: currentColor; }
+        .target-yellow { filter: drop-shadow(0 0 1px #634500); }
+
+        .swirl { 
+            border-radius: 50%; 
+            background: conic-gradient(var(--rb-red), var(--rb-yellow), var(--rb-green), var(--rb-blue), var(--rb-red)); 
+            opacity: 0.8;
+        }
+
+        /* 牆面控制按鈕配置 */
+        .wall-controls {
+            display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; justify-items: center;
+        }
+        .wall-btn {
+            width: 50px; height: 40px; font-weight: bold; border: none; border-radius: 6px; cursor: pointer;
+            background: #564c67; color: #fff; transition: 0.2s;
+        }
+        .wall-btn.active {
+            background: var(--accent-gold); color: #2a2035;
+        }
+        .wall-btn:hover { filter: brightness(1.15); }
+
+        /* 輸入框與選擇器 */
+        select, textarea {
+            width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #4e3e5f;
+            background: #2a2035; color: #fff; font-size: 0.9rem; outline: none;
+        }
+        select:focus, textarea:focus { border-color: var(--accent-purple); }
+
+        /* 一般按鈕 */
+        button.action-btn {
+            width: 100%; padding: 12px; font-weight: bold; border: none; border-radius: 10px;
+            cursor: pointer; transition: 0.2s; text-transform: uppercase; font-size: 0.85rem;
+        }
+        button.action-btn:hover { filter: brightness(1.1); transform: translateY(-1px); }
+
+        .btn-save { background: #52d681; color: #2a2035; }
+        .btn-reset { background: #564c67; color: #e1cfe1; }
+        .btn-clear { background: #ff7675; color: white; }
+        .btn-play { background: var(--accent-purple); color: #2a2035; }
+
+        .btn-row { display: flex; gap: 8px; margin-top: 5px; }
+
+        /* 幫助說明 */
+        .help-text {
+            color: #bca0dc; font-size: 0.75rem; line-height: 1.4;
+        }
+
+        /* 自訂滾動條 */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: var(--panel-candy); }
+        ::-webkit-scrollbar-thumb { background: #564c67; border-radius: 3px; }
+
+        /* 斜角有色牆壁 */
+        .diagonal-wall {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 2;
+        }
+        .diagonal-wall.slash {
+            background: linear-gradient(to top right, transparent calc(50% - 4px), var(--diag-color) calc(50% - 2px), var(--diag-color) calc(50% + 2px), transparent calc(50% + 4px));
+            filter: drop-shadow(0 0 2px var(--diag-color));
+        }
+        .diagonal-wall.backslash {
+            background: linear-gradient(to bottom right, transparent calc(50% - 4px), var(--diag-color) calc(50% - 2px), var(--diag-color) calc(50% + 2px), transparent calc(50% + 4px));
+            filter: drop-shadow(0 0 2px var(--diag-color));
+        }
+    </style>
+</head>
+<body>
+
+    <div class="main-container">
+        <!-- 地圖區域 -->
+        <div class="board-section">
+            <div id="editor-board"></div>
+        </div>
+
+        <!-- 編輯面板 -->
+        <div class="editor-panel">
+            <h2 class="panel-title">地圖編輯器</h2>
+
+            <!-- 選取資訊 -->
+            <div class="control-group" style="text-align: center;">
+                <div class="section-title">目前選取格子</div>
+                <div id="selected-info" style="font-size: 1.1rem; font-weight: bold; color: var(--accent-gold);">
+                    請點擊格子開始編輯
+                </div>
+            </div>
+
+            <!-- 牆壁設定 -->
+            <div class="control-group">
+                <div class="section-title">牆壁編輯</div>
+                <div class="wall-controls">
+                    <div></div>
+                    <button class="wall-btn" id="wall-top" onclick="toggleSelectedWall(1)">▲</button>
+                    <div></div>
+                    <button class="wall-btn" id="wall-left" onclick="toggleSelectedWall(8)">◀</button>
+                    <div style="display: flex; align-items: center; justify-content: center; font-size: 0.7rem; color: #888;">WALL</div>
+                    <button class="wall-btn" id="wall-right" onclick="toggleSelectedWall(2)">▶</button>
+                    <div></div>
+                    <button class="wall-btn" id="wall-bottom" onclick="toggleSelectedWall(4)">▼</button>
+                    <div></div>
+                </div>
+            </div>
+
+            <!-- 斜角牆設定 -->
+            <div class="control-group">
+                <div class="section-title">斜角牆編輯 (反射/穿透)</div>
+                <div style="display: flex; flex-direction: column; gap: 8px;">
+                    <div>
+                        <label style="font-size: 0.75rem; color: #888; display: block; margin-bottom: 4px;">斜角方向</label>
+                        <select id="diag-type" onchange="onDiagConfigChange()">
+                            <option value="0">無斜角牆</option>
+                            <option value="1">右上左下 ( / )</option>
+                            <option value="2">左上右下 ( \ )</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label style="font-size: 0.75rem; color: #888; display: block; margin-bottom: 4px;">牆壁顏色 (同色機器人可穿過)</label>
+                        <select id="diag-color" onchange="onDiagConfigChange()">
+                            <option value="0">紅色 (Red)</option>
+                            <option value="1">藍色 (Blue)</option>
+                            <option value="2">綠色 (Green)</option>
+                            <option value="3">黃色 (Yellow)</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 目標設定 -->
+            <div class="control-group">
+                <div class="section-title">目標編輯</div>
+                <div style="display: flex; flex-direction: column; gap: 8px;">
+                    <div>
+                        <label style="font-size: 0.75rem; color: #888; display: block; margin-bottom: 4px;">目標圖案</label>
+                        <select id="target-type" onchange="onTargetConfigChange()">
+                            <option value="none">無目標</option>
+                            <option value="icon-sun">太陽 (Sun)</option>
+                            <option value="icon-star">星星 (Star)</option>
+                            <option value="icon-moon">月亮 (Moon)</option>
+                            <option value="icon-triangle">三角形 (Triangle)</option>
+                            <option value="swirl">糖果漩渦 (Swirl)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label style="font-size: 0.75rem; color: #888; display: block; margin-bottom: 4px;">適用顏色</label>
+                        <select id="target-color" onchange="onTargetConfigChange()">
+                            <option value="#ffb300">黃色 (Yellow)</option>
+                            <option value="#ff5e7e">紅色 (Red)</option>
+                            <option value="#4db8ff">藍色 (Blue)</option>
+                            <option value="#52d681">綠色 (Green)</option>
+                            <option value="swirl">任何顏色 (糖果漩渦用)</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 預設操作 -->
+            <div class="control-group">
+                <div class="section-title">操作功能</div>
+                <button class="action-btn" onclick="document.getElementById('file-input-editor').click()" style="background: #a29bfe; color: #2a2035; font-weight: bold; width: 100%; border: none; border-radius: 10px; padding: 12px; cursor: pointer; margin-bottom: 8px;">匯入地圖檔案 (.json)</button>
+                <input type="file" id="file-input-editor" accept=".json,.txt" style="display: none;" onchange="importMapFileEditor(this)">
+                
+                <div style="margin-top: 5px; margin-bottom: 5px;">
+                    <label style="font-size: 0.75rem; color: #888; display: block; margin-bottom: 4px;">地圖名稱</label>
+                    <input type="text" id="map-name" value="自訂地圖" placeholder="請輸入地圖名稱" style="width: 100%; padding: 8px; border-radius: 6px; border: 1px solid #4e3e5f; background: #2a2035; color: #fff; font-size: 0.85rem; outline: none;">
+                </div>
+                <button class="action-btn" onclick="downloadMapFile()" style="background: #ffeaa7; color: #2a2035; font-weight: bold; width: 100%; border: none; border-radius: 10px; padding: 12px; cursor: pointer;">導出地圖檔案 (.json)</button>
+                <div class="btn-row" style="margin-top: 8px;">
+                    <button class="action-btn btn-reset" onclick="loadDefaultMap()">預設地圖</button>
+                    <button class="action-btn btn-clear" onclick="clearMap()">清空地圖</button>
+                </div>
+                <button class="action-btn btn-play" onclick="location.href='index.html'" style="margin-top: 8px;">開始遊戲 (返回)</button>
+            </div>
+
+            <!-- 數據導出導入 -->
+            <div class="control-group">
+                <div class="section-title">地圖代碼 (JSON)</div>
+                <textarea id="json-io" rows="3" placeholder="地圖 JSON 代碼會在這裡生成，你也可以在此貼上代碼進行匯入"></textarea>
+                <div class="btn-row">
+                    <button class="action-btn btn-reset" style="padding: 6px;" onclick="exportJSON()">產生代碼</button>
+                    <button class="action-btn btn-reset" style="padding: 6px;" onclick="importJSON()">匯入代碼</button>
+                </div>
+            </div>
+
+            <!-- 操作說明 -->
+            <div class="help-text">
+                <b>【操作指南】</b><br>
+                1. <b>滑鼠點擊格子邊緣</b>：可直接切換對應位置的牆壁（系統會自動同步相鄰格子的牆壁以符合反射軌跡規則）。<br>
+                2. <b>點擊格子中央</b>：選取該格子，並可於右側編輯該格的目標圖案與適用顏色。<br>
+                3. 地圖最外圈的邊界牆壁是鎖定無法移除的。<br>
+                4. 地圖中心區 (7,7) 至 (8,8) 為固定障礙物。
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const COLORS = {
+            red: '#ff5e7e',
+            blue: '#4db8ff',
+            green: '#52d681',
+            yellow: '#ffb300' 
+        };
+
+        const DEFAULT_MAP = [
+            [9, 1, 5, 1, 3, 9, 1, 1, 1, 3, 9, 1, 1, 1, 5, 3],
+            [8, 2, 9, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 9, 2],
+            [8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 12, 0, 0, 0, 2],
+            [8, 0, 0, 0, 0, 2, 12, 0, 0, 0, 0, 1, 0, 0, 0, 6],
+            [12, 0, 0, 0, 4, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 3],
+            [9, 0, 0, 0, 3, 8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2],
+            [8, 6, 8, 0, 0, 0, 0, 4, 4, 0, 4, 0, 0, 6, 8, 2],
+            [8, 1, 0, 0, 0, 0, 2, 9, 3, 8, 3, 8, 0, 1, 0, 2],
+            [8, 4, 0, 0, 0, 4, 2, 12, 6, 8, 0, 0, 0, 0, 0, 6],
+            [8, 3, 8, 0, 2, 9, 0, 1, 5, 0, 0, 0, 0, 4, 0, 3],
+            [12, 0, 0, 0, 0, 0, 0, 2, 9, 0, 0, 0, 2, 9, 0, 2],
+            [9, 0, 0, 0, 0, 0, 0, 0, 0, 0, 6, 8, 0, 0, 0, 2],
+            [8, 0, 0, 0, 0, 0, 6, 8, 0, 0, 1, 0, 0, 2, 12, 2],
+            [8, 0, 0, 0, 0, 0, 1, 0, 0, 4, 0, 0, 0, 0, 1, 2],
+            [8, 2, 12, 0, 0, 0, 0, 0, 0, 3, 8, 0, 0, 0, 0, 2],
+            [12, 4, 5, 4, 4, 6, 12, 4, 4, 4, 4, 6, 12, 4, 4, 6]
+        ];
+
+        const DEFAULT_TARGETS = [
+            { name: '黃太陽', color: COLORS.yellow, robot: 'yellow', type: 'icon-sun', r: 1, c: 2 },
+            { name: '黃星星', color: COLORS.yellow, robot: 'yellow', type: 'icon-star', r: 9, c: 1 },
+            { name: '黃月亮', color: COLORS.yellow, robot: 'yellow', type: 'icon-moon', r: 7, c: 10 },
+            { name: '黃三角', color: COLORS.yellow, robot: 'yellow', type: 'icon-triangle', r: 12, c: 14 },
+            { name: '紅太陽', color: COLORS.red, robot: 'red', type: 'icon-sun', r: 12, c: 6 },
+            { name: '紅星星', color: COLORS.red, robot: 'red', type: 'icon-star', r: 10, c: 13 },
+            { name: '紅月亮', color: COLORS.red, robot: 'red', type: 'icon-moon', r: 5, c: 4 },
+            { name: '紅三角', color: COLORS.red, robot: 'red', type: 'icon-triangle', r: 1, c: 14 },
+            { name: '藍太陽', color: COLORS.blue, robot: 'blue', type: 'icon-sun', r: 14, c: 9 },
+            { name: '藍星星', color: COLORS.blue, robot: 'blue', type: 'icon-star', r: 2, c: 11 },
+            { name: '藍月亮', color: COLORS.blue, robot: 'blue', type: 'icon-moon', r: 9, c: 5 },
+            { name: '藍三角', color: COLORS.blue, robot: 'blue', type: 'icon-triangle', r: 3, c: 6 },
+            { name: '綠太陽', color: COLORS.green, robot: 'green', type: 'icon-sun', r: 6, c: 13 },
+            { name: '綠星星', color: COLORS.green, robot: 'green', type: 'icon-star', r: 6, c: 1 },
+            { name: '綠月亮', color: COLORS.green, robot: 'green', type: 'icon-moon', r: 11, c: 10 },
+            { name: '綠三角', color: COLORS.green, robot: 'green', type: 'icon-triangle', r: 14, c: 2 },
+            { name: '糖果漩渦', color: 'swirl', robot: 'any', type: 'swirl', r: 10, c: 8 }
+        ];
+
+        let MAP_DATA = [];
+        let TARGET_DATA = [];
+        let selectedCell = null; // { r, c }
+
+        const typeNames = {
+            'icon-sun': '太陽',
+            'icon-star': '星星',
+            'icon-moon': '月亮',
+            'icon-triangle': '三角',
+            'swirl': '漩渦'
+        };
+        const colorPrefixes = {
+            '#ff5e7e': '紅',
+            '#4db8ff': '藍',
+            '#52d681': '綠',
+            '#ffb300': '黃',
+            'swirl': '糖果'
+        };
+        const robotColors = {
+            '#ff5e7e': 'red',
+            '#4db8ff': 'blue',
+            '#52d681': 'green',
+            '#ffb300': 'yellow',
+            'swirl': 'any'
+        };
+
+        // 初始化
+        function init() {
+            loadPresetData();
+            renderBoardStructure();
+            renderGrid();
+            updateEditorPanel();
+        }
+
+        function loadPresetData() {
+            MAP_DATA = JSON.parse(JSON.stringify(DEFAULT_MAP));
+            TARGET_DATA = JSON.parse(JSON.stringify(DEFAULT_TARGETS));
+        }
+
+        // 繪製棋盤 DOM 結構
+        function renderBoardStructure() {
+            const board = document.getElementById('editor-board');
+            board.innerHTML = '';
+            for(let r=0; r<16; r++) {
+                for(let c=0; c<16; c++) {
+                    const cell = document.createElement('div');
+                    cell.className = 'cell'; 
+                    cell.id = `cell-${r}-${c}`;
+                    
+                    // 點擊事件處理
+                    cell.addEventListener('click', (e) => {
+                        // 如果是中心禁區，不可編輯
+                        if ((r===7 || r===8) && (c===7 || c===8)) return;
+                        
+                        const rect = cell.getBoundingClientRect();
+                        const x = e.clientX - rect.left;
+                        const y = e.clientY - rect.top;
+                        const w = rect.width;
+                        const h = rect.height;
+                        
+                        const threshold = 0.22;
+                        let clickedWall = null;
+                        
+                        if (x < w * threshold) {
+                            clickedWall = 8; // 左牆
+                        } else if (x > w * (1 - threshold)) {
+                            clickedWall = 2; // 右牆
+                        } else if (y < h * threshold) {
+                            clickedWall = 1; // 上牆
+                        } else if (y > h * (1 - threshold)) {
+                            clickedWall = 4; // 下牆
+                        }
+                        
+                        if (clickedWall !== null) {
+                            toggleWall(r, c, clickedWall);
+                        } else {
+                            selectCell(r, c);
+                        }
+                    });
+
+                    board.appendChild(cell);
+                }
+            }
+        }
+
+        // 重新繪製格子上的牆壁和目標
+        function renderGrid() {
+            for(let r=0; r<16; r++) {
+                for(let c=0; c<16; c++) {
+                    const cell = document.getElementById(`cell-${r}-${c}`);
+                    
+                    // 清除牆壁類別與目標圖示
+                    cell.className = 'cell';
+                    if (selectedCell && selectedCell.r === r && selectedCell.c === c) {
+                        cell.classList.add('selected');
+                    }
+                    
+                    const innerIcon = cell.querySelector('.target-icon');
+                    if (innerIcon) innerIcon.remove();
+
+                    // 清除斜角牆
+                    const innerDiag = cell.querySelector('.diagonal-wall');
+                    if (innerDiag) innerDiag.remove();
+
+                    // 套用牆壁
+                    const v = MAP_DATA[r][c];
+                    if(v & 1) cell.classList.add('wall-top');
+                    if(v & 2) cell.classList.add('wall-right');
+                    if(v & 4) cell.classList.add('wall-bottom');
+                    if(v & 8) cell.classList.add('wall-left');
+                    
+                    // 中心點障礙物
+                    if((r===7||r===8)&&(c===7||c===8)) {
+                        cell.classList.add('center-block');
+                    }
+
+                    // 繪製斜角牆
+                    const diagType = (v >> 4) & 3;
+                    const diagColorIdx = (v >> 6) & 3;
+                    if (diagType > 0) {
+                        const diagWall = document.createElement('div');
+                        diagWall.className = `diagonal-wall ${diagType === 1 ? 'slash' : 'backslash'}`;
+                        const colorsList = ['red', 'blue', 'green', 'yellow'];
+                        const colorKey = colorsList[diagColorIdx];
+                        diagWall.style.setProperty('--diag-color', COLORS[colorKey]);
+                        cell.appendChild(diagWall);
+                    }
+
+                    // 繪製目標
+                    const t = TARGET_DATA.find(x => x.r === r && x.c === c);
+                    if(t) {
+                        const icon = document.createElement('div');
+                        icon.className = `target-icon ${t.type} ${t.color === COLORS.yellow ? 'target-yellow' : ''}`;
+                        if(t.color !== 'swirl') icon.style.color = t.color;
+                        cell.appendChild(icon);
+                    }
+                }
+            }
+        }
+
+        // 選取格子
+        function selectCell(r, c) {
+            selectedCell = { r, c };
+            
+            // 更新選取樣式
+            document.querySelectorAll('.cell').forEach(el => el.classList.remove('selected'));
+            const cell = document.getElementById(`cell-${r}-${c}`);
+            if (cell) cell.classList.add('selected');
+
+            updateEditorPanel();
+        }
+
+        // 更新右側面板狀態
+        function updateEditorPanel() {
+            const infoEl = document.getElementById('selected-info');
+            const topBtn = document.getElementById('wall-top');
+            const bottomBtn = document.getElementById('wall-bottom');
+            const leftBtn = document.getElementById('wall-left');
+            const rightBtn = document.getElementById('wall-right');
+            const typeSelect = document.getElementById('target-type');
+            const colorSelect = document.getElementById('target-color');
+            const diagTypeSelect = document.getElementById('diag-type');
+            const diagColorSelect = document.getElementById('diag-color');
+
+            if (!selectedCell) {
+                infoEl.innerText = "請點擊格子開始編輯";
+                topBtn.className = 'wall-btn';
+                bottomBtn.className = 'wall-btn';
+                leftBtn.className = 'wall-btn';
+                rightBtn.className = 'wall-btn';
+                typeSelect.value = 'none';
+                diagTypeSelect.value = '0';
+                diagColorSelect.value = '0';
+                return;
+            }
+
+            const { r, c } = selectedCell;
+            infoEl.innerText = `第 ${r + 1} 列, 第 ${c + 1} 行 (格 ${r}-${c})`;
+
+            // 讀取並標示目前格子的牆壁狀態
+            const v = MAP_DATA[r][c];
+            topBtn.className = 'wall-btn' + (v & 1 ? ' active' : '');
+            rightBtn.className = 'wall-btn' + (v & 2 ? ' active' : '');
+            bottomBtn.className = 'wall-btn' + (v & 4 ? ' active' : '');
+            leftBtn.className = 'wall-btn' + (v & 8 ? ' active' : '');
+
+            // 讀取斜角有色牆狀態
+            diagTypeSelect.value = ((v >> 4) & 3).toString();
+            diagColorSelect.value = ((v >> 6) & 3).toString();
+
+            // 讀取目標狀態
+            const t = TARGET_DATA.find(x => x.r === r && x.c === c);
+            if (t) {
+                typeSelect.value = t.type;
+                colorSelect.value = t.color;
+            } else {
+                typeSelect.value = 'none';
+            }
+        }
+
+        // 切換選取格子的牆壁 (點按鈕)
+        function toggleSelectedWall(wallBit) {
+            if (!selectedCell) return;
+            toggleWall(selectedCell.r, selectedCell.c, wallBit);
+        }
+
+        // 切換牆壁邏輯 (含邊界鎖定與相鄰對稱)
+        function toggleWall(r, c, wallBit) {
+            // 外圍牆壁鎖定
+            if (wallBit === 1 && r === 0) return;
+            if (wallBit === 4 && r === 15) return;
+            if (wallBit === 8 && c === 0) return;
+            if (wallBit === 2 && c === 15) return;
+
+            // 切換當前格
+            MAP_DATA[r][c] ^= wallBit;
+
+            // 同步切換相鄰格
+            if (wallBit === 1 && r > 0) MAP_DATA[r-1][c] ^= 4; // 上格的下牆
+            if (wallBit === 4 && r < 15) MAP_DATA[r+1][c] ^= 1; // 下格的上牆
+            if (wallBit === 8 && c > 0) MAP_DATA[r][c-1] ^= 2; // 左格的右牆
+            if (wallBit === 2 && c < 15) MAP_DATA[r][c+1] ^= 8; // 右格的左牆
+
+            renderGrid();
+            updateEditorPanel();
+        }
+
+        // 目標編輯器數值變更時自動儲存
+        function onTargetConfigChange() {
+            if (!selectedCell) return;
+            const { r, c } = selectedCell;
+            const type = document.getElementById('target-type').value;
+            const color = document.getElementById('target-color').value;
+
+            // 先移除原有的目標
+            TARGET_DATA = TARGET_DATA.filter(x => !(x.r === r && x.c === c));
+
+            // 如果選的不是「無」，則建立新目標
+            if (type !== 'none') {
+                const name = (colorPrefixes[color] || '') + (typeNames[type] || '');
+                const robot = robotColors[color] || 'any';
+                
+                TARGET_DATA.push({
+                    name: name,
+                    color: color,
+                    robot: robot,
+                    type: type,
+                    r: r,
+                    c: c
+                });
+            }
+
+            renderGrid();
+        }
+
+        // 斜角牆編輯器數值變更時自動儲存
+        function onDiagConfigChange() {
+            if (!selectedCell) return;
+            const { r, c } = selectedCell;
+            const typeVal = parseInt(document.getElementById('diag-type').value);
+            const colorVal = parseInt(document.getElementById('diag-color').value);
+
+            // 保留 0-3 bit (標準牆壁)，清除其餘
+            let v = MAP_DATA[r][c] & 15;
+            v |= (typeVal << 4);
+            v |= (colorVal << 6);
+
+            MAP_DATA[r][c] = v;
+
+            renderGrid();
+        }
+
+        // 匯入地圖檔案至編輯器
+        function importMapFileEditor(input) {
+            const file = input.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const parsed = JSON.parse(e.target.result);
+                    if (parsed.map && Array.isArray(parsed.map) && parsed.targets && Array.isArray(parsed.targets)) {
+                        let mapName = parsed.name || file.name.substring(0, file.name.lastIndexOf('.')) || '自訂地圖';
+                        MAP_DATA = parsed.map;
+                        TARGET_DATA = parsed.targets;
+                        document.getElementById('map-name').value = mapName;
+                        renderGrid();
+                        updateEditorPanel();
+                        alert(`成功匯入並載入地圖「${mapName}」至編輯器！`);
+                    } else {
+                        alert('檔案格式錯誤，必須包含地圖與目標數據。');
+                    }
+                } catch(err) {
+                    alert('無法解析檔案內容，請確保它是合法的地圖 JSON 文字格式。');
+                }
+            };
+            reader.readAsText(file);
+        }
+
+        // 載入預設地圖並覆蓋
+        function loadDefaultMap() {
+            if (confirm('確定要載入預設的官方地圖嗎？這會覆蓋目前正在編輯的地圖。')) {
+                loadPresetData();
+                renderGrid();
+                updateEditorPanel();
+            }
+        }
+
+        // 清空地圖 (只留外圈牆壁與中心塊)
+        function clearMap() {
+            if (confirm('確定要清除所有的內部牆壁與目標嗎？')) {
+                MAP_DATA = [];
+                for(let r=0; r<16; r++) {
+                    const row = [];
+                    for(let c=0; c<16; c++) {
+                        let val = 0;
+                        // 四周邊界設定牆壁
+                        if (r === 0) val |= 1;
+                        if (r === 15) val |= 4;
+                        if (c === 0) val |= 8;
+                        if (c === 15) val |= 2;
+
+                        // 固定中心障礙區的牆壁
+                        if (r === 6 && (c === 7 || c === 8)) val |= 4; // (6,7)和(6,8)下方有牆
+                        if (r === 9 && (c === 7 || c === 8)) val |= 1; // (9,7)和(9,8)上方有牆
+                        if (c === 6 && (r === 7 || r === 8)) val |= 2; // (7,6)和(8,6)右方有牆
+                        if (c === 9 && (r === 7 || r === 8)) val |= 8; // (7,9)和(8,9)左方有牆
+
+                        if (r === 7 && c === 7) val |= 9;  // 中心左上：上、左牆
+                        if (r === 7 && c === 8) val |= 3;  // 中心右上：上、右牆
+                        if (r === 8 && c === 7) val |= 12; // 中心左下：下、左牆
+                        if (r === 8 && c === 8) val |= 6;  // 中心右下：下、右牆
+
+                        row.push(val);
+                    }
+                    MAP_DATA.push(row);
+                }
+                TARGET_DATA = [];
+                renderGrid();
+                updateEditorPanel();
+            }
+        }
+
+        // 導出 JSON 代碼
+        function exportJSON() {
+            const data = {
+                map: MAP_DATA,
+                targets: TARGET_DATA
+            };
+            document.getElementById('json-io').value = JSON.stringify(data);
+        }
+
+        // 匯入 JSON 代碼
+        function importJSON() {
+            const code = document.getElementById('json-io').value.trim();
+            if (!code) {
+                alert('請先在文字框中貼入地圖 JSON 代碼！');
+                return;
+            }
+            try {
+                const parsed = JSON.parse(code);
+                if (parsed.map && Array.isArray(parsed.map) && parsed.targets && Array.isArray(parsed.targets)) {
+                    MAP_DATA = parsed.map;
+                    TARGET_DATA = parsed.targets;
+                    renderGrid();
+                    updateEditorPanel();
+                    alert('地圖代碼已成功匯入！(記得點擊「儲存並套用」以應用到遊戲中)');
+                } else {
+                    alert('代碼格式錯誤：必需包含 map 陣列與 targets 陣列！');
+                }
+            } catch(e) {
+                alert('無法解析代碼，請確認是否為正確的 JSON 格式。' + e.message);
+            }
+        }
+
+        // 下載地圖檔案
+        function downloadMapFile() {
+            let filename = document.getElementById('map-name').value.trim();
+            if (!filename) {
+                filename = '自訂地圖';
+            }
+            // 移除不合法的檔案字元
+            filename = filename.replace(/[\\/:*?"<>|]/g, '');
+
+            const data = {
+                name: filename,
+                map: MAP_DATA,
+                targets: TARGET_DATA
+            };
+            const blob = new Blob([JSON.stringify(data, null, 4)], { type: "application/json;charset=utf-8" });
+            const a = document.createElement("a");
+            a.href = URL.createObjectURL(blob);
+            a.download = `${filename}.json`;
+            a.click();
+            URL.revokeObjectURL(a.href);
+        }
+
+        window.onload = init;
+    </script>
+</body>
+</html>
